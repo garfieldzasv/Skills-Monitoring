@@ -64,4 +64,15 @@ describe("overlayApi (embedded / CefSharp)", () => {
     (window as unknown as { __OverlayCallback: (m: unknown) => void }).__OverlayCallback({ type: "ChangeZone", zoneID: 7 });
     expect(seen).toEqual([7]);
   });
+
+  it("say: calls the handler with the callback, only once connected", async () => {
+    const { addOverlayListener, say } = await import("@/core/overlay/overlayApi");
+    addOverlayListener("LogLine", () => {});
+    say("雪仇"); // not connected yet: dropped, not queued
+    api.ready = true;
+    vi.advanceTimersByTime(300);
+    say("雪仇");
+    say("");
+    expect(api.calls.filter((c) => c.msg.call === "say")).toEqual([{ msg: { call: "say", text: "雪仇" }, argCount: 2 }]);
+  });
 });

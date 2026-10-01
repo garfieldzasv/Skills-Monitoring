@@ -20,6 +20,8 @@ const check = (name, ok, detail = "") => results.push(`${ok ? "PASS" : "FAIL"}  
 
 // ---------- fake OverlayPlugin ----------
 const clients = new Set();
+/** Texts the overlay asked OverlayPlugin to speak (`say`), in WebSocket mode. */
+const wsSpoken = [];
 const wss = new WebSocketServer({ port: WS_PORT, path: "/ws" });
 wss.on("connection", (sock) => {
   const client = { sock, events: new Set() };
@@ -27,6 +29,7 @@ wss.on("connection", (sock) => {
   sock.on("message", (data) => {
     const msg = JSON.parse(String(data));
     if (msg.call === "subscribe") msg.events.forEach((e) => client.events.add(e));
+    if (msg.call === "say") wsSpoken.push(msg.text);
   });
   sock.on("close", () => clients.delete(client));
 });
@@ -267,6 +270,39 @@ push(ability("10000003", 16196)); // 四色技巧舞步结束
 await sleep(800);
 const afterFinish = await finishSlot();
 check("四色技巧舞步结束 starts the 20 s buff", /^(19|20)$/.test(afterFinish?.cd ?? "") && afterFinish.buff, JSON.stringify(afterFinish));
+
+// Announcements through OverlayPlugin's `say` (ACT TTS): switched on in this overlay's layout,
+// "job + skill" text, and 雪仇 silenced for warriors only.
+const spokenTexts = async () =>
+  MODE === "ws" ? [...wsSpoken] : await overlay.evaluate("window.__mockCalls.filter((c) => c.call === 'say').map((c) => c.text)");
+push({ type: "PartyChanged", party });
+await sleep(400);
+const settingsBeforeSay = await settings.evaluate("localStorage.getItem('skills-monitoring:settings')");
+const layoutBeforeSay = await settings.evaluate("localStorage.getItem('skills-monitoring:layout')");
+await settings.evaluate(`(() => {
+  const s = JSON.parse(localStorage.getItem('skills-monitoring:settings') ?? '{}');
+  localStorage.setItem('skills-monitoring:settings', JSON.stringify({ ...s, silentActions: { 21: [7535] } }));
+  localStorage.setItem('skills-monitoring:layout', JSON.stringify({ announce: true, announceText: 'jobAndSkill' }));
+})()`);
+await sleep(500);
+const spokenBefore = (await spokenTexts()).length;
+push(ability("10000001", 7535)); // PLD 雪仇: announced
+push(ability("10000002", 7535)); // WAR 雪仇: silenced for WAR
+push(ability("10000002", 9)); // not watched
+await sleep(600);
+const spoken = (await spokenTexts()).slice(spokenBefore);
+check("watched skill announced through OverlayPlugin say (job + skill; silenced slot skipped)", JSON.stringify(spoken) === JSON.stringify(["骑士 雪仇"]), JSON.stringify(spoken));
+await settings.evaluate("[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '布局')?.click()");
+await sleep(300);
+await settings.evaluate("[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '试听')?.click()");
+await sleep(600);
+const afterTest = (await spokenTexts()).slice(spokenBefore + spoken.length);
+check("「试听」 in the settings window makes the overlay speak", JSON.stringify(afterTest) === JSON.stringify(["语音播报测试"]), JSON.stringify(afterTest));
+await settings.evaluate(`(() => {
+  localStorage.setItem('skills-monitoring:settings', ${JSON.stringify(settingsBeforeSay)} ?? '{}');
+  localStorage.setItem('skills-monitoring:layout', ${JSON.stringify(layoutBeforeSay)} ?? '{}');
+})()`);
+await sleep(400);
 
 push({ type: "PartyChanged", party });
 await overlay.evaluate("document.dispatchEvent(new CustomEvent('onOverlayStateUpdate',{detail:{isLocked:false}}))");

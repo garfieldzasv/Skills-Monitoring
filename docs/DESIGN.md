@@ -47,6 +47,7 @@
 | 布局与校准 | 图标尺寸、行距、间距、偏移、方向，校准网格（第 10 节） |
 | 设置页 | 拖动排序、技能选择器、技能参数覆盖、导入导出、恢复默认（11.2） |
 | 演示模式 | 悬浮窗未锁定时显示演示小队，可模拟全部释放（10.2） |
+| 语音播报 | 监视的技能释放时，通过 ACT 的 TTS 播报；可选播报内容，每个技能槽单独开关（11.4） |
 
 ### 2.2 设计原则
 
@@ -363,7 +364,7 @@ interface JobInfo {
 - **内嵌模式**：页面在 OverlayPlugin 的悬浮窗里运行，使用注入的 `window.OverlayPluginApi`；
 - **WebSocket 模式**：URL 带 `?OVERLAY_WS=ws://127.0.0.1:10501/ws` 时，通过 WebSocket 连接。用于在普通浏览器里调试，或者从浏览器打开设置页。
 
-对外只暴露 `addOverlayListener(event, handler)` 和 `getConnectionMode()`。应用只订阅事件，不调用其他 OverlayPlugin 接口。
+对外暴露 `addOverlayListener(event, handler)`、`getConnectionMode()`，以及调用不需要回复的处理器的 `callOverlayHandler(msg)`（目前只用于语音播报的 `say`，见 11.4）。未连接时的调用直接丢弃，不排队：播报是即时的，晚到没有意义。
 
 **内嵌模式的坑（已在 ACT 实测中踩过）**：`OverlayPluginApi.callHandler` 是通过 CefSharp 绑定的 C# 方法，调用时**必须传两个参数**（消息和回调函数）。只传一个参数会报“Missing Parameters”，所有订阅都会失败，悬浮窗收不到任何事件。`tests/overlayApi.test.ts` 和端到端检查的内嵌模式都覆盖了这一点。
 
@@ -597,6 +598,8 @@ interface LayoutSettings {
   textScale: number;       // 倒计时和层数文字的缩放，默认 1
   opacity: number;         // 整体不透明度，默认 1
   showDuration: boolean;   // 效果期间是否显示持续时间，默认 true
+  announce: boolean;       // 语音播报总开关，默认 false（见 11.4）
+  announceText: "skill" | "jobAndSkill" | "memberAndSkill"; // 播报内容，默认 "skill"
 }
 ```
 
@@ -620,7 +623,7 @@ interface LayoutSettings {
 | 键 | 方向 | 内容 |
 |---|---|---|
 | `skills-monitoring:live-party` | 悬浮窗 → 设置页 | 当前显示的队员顺序（内容不变时不重复写入） |
-| `skills-monitoring:command` | 设置页 → 悬浮窗 | `castAll` / `reset`，带时间戳，保证重复指令也能触发事件 |
+| `skills-monitoring:command` | 设置页 → 悬浮窗 | `castAll` / `reset` / `sayTest`（试听），带时间戳，保证重复指令也能触发事件 |
 | `skills-monitoring:preview` | 设置页 → 悬浮窗 | 校准网格、强制演示小队两个开关 |
 | `skills-monitoring:settings` | 双向 | 设置本身，包括手动顺序 |
 
@@ -663,14 +666,33 @@ MemberRow（每个队员一行，高度 = rowPitch）
 | 标签页 | 内容 |
 |---|---|
 | 小队排序 | 当前小队的顺序（手动上下调整）；自己置顶开关；坦克、治疗、输出三套预设，每套的职能顺序和职业顺序（拖动）；复制到其他预设；同职业 ActorID 方向 |
-| 技能槽 | 按职业列出技能槽：拖动排序、打开技能选择器（本地数据搜索）、增删、恢复这个职业的默认值。基础职业自动沿用进阶职业的配置 |
-| 布局 | 悬浮窗预览（校准网格、演示小队、模拟全部释放、重置冷却）和布局参数 |
+| 技能槽 | 按职业列出技能槽：拖动排序、打开技能选择器（本地数据搜索）、增删、恢复这个职业的默认值、每个技能是否播报。基础职业自动沿用进阶职业的配置 |
+| 布局 | 悬浮窗预览（校准网格、演示小队、模拟全部释放、重置冷却）、布局参数、语音播报（开关、播报内容、试听） |
 | 技能参数 | 对单个技能覆盖冷却、持续时间、充能层数、最低等级，用按等级分段的文本输入，不接受代码 |
 | 导入导出 | 导入、导出、恢复默认 |
 
 ### 11.3 跨窗口同步
 
 悬浮窗和设置页是两个窗口，但同源，共享 localStorage。设置保存后，另一个窗口通过 `storage` 事件重新加载。保存时防抖 200ms。
+
+### 11.4 语音播报
+
+监视的技能释放时，悬浮窗调用 OverlayPlugin 的 `say` 处理器，由 ACT 用它自己配置的 TTS 播报。OverlayPlugin 的实现（`MiniParseEventSource`）是 `ActGlobals.oFormActMain.TTS(text)`，内嵌和 WebSocket 两种连接方式都能用；内嵌模式同样必须传回调参数（见 6.1）。
+
+**什么时候算“触发”**（`MonitorEngine.onTrigger`）：和冷却模型对“刚释放”的定义一致（7.3）。
+
+- 普通技能槽：每次释放都触发，包括充能技能的后续释放；
+- 显示顶替动作的技能槽（比如四色技巧舞步结束）：按下被顶替的动作（技巧舞步）不触发，之后带持续时间的顶替动作（任意一种技巧舞步结束）才触发，提拉纳不触发；
+- 演示模式的“模拟全部释放”不触发；
+- 同一个队员有多个技能槽在同一个计时器上时（比如同时监视失血箭和死亡箭雨，或者技巧舞步和四色技巧舞步结束），每次释放归到对应的那个技能槽：先按升级链找，找不到再按种类找（顶替动作归显示顶替动作的技能槽，计时器本身的动作归显示它的技能槽）。播报开关因此能分别生效。
+
+**播报内容**（`announceText`）：只有技能名（默认）、职业 + 技能名、队员名 + 技能名。技能名用实际释放的那个动作的名字，比如单色技巧舞步结束、共享复唱的死亡箭雨，而不是技能槽上显示的名字。
+
+**开关**：
+
+- 总开关 `announce` 放在布局里（10.1），按悬浮窗分别保存，默认关闭。同时开两个悬浮窗（`?profile=`）时，只有打开了开关的那个会播报，不会每句重复两遍；
+- 每个技能槽是否播报放在设置里（`silentActions`，12.1），所有悬浮窗共用。只记录关掉的技能，所以打开总开关后默认全部播报；技能槽被移除时，对应的记录一起删掉；
+- 设置页“布局”里的“试听”通过跨窗口指令 `sayTest` 让悬浮窗播报一句“语音播报测试”，用来确认 ACT 的 TTS 能出声。指令带上设置窗口的 `profile`，只有打开这个设置页的那个悬浮窗会播报，和总开关的范围一致。
 
 ---
 
@@ -683,6 +705,7 @@ interface Settings {
   version: 1;
   watchActions: Record<number, number[]>;          // 进阶职业 → 技能 ID 列表
   skillOverrides: Record<number, SkillOverride>;    // 用户对技能参数的覆盖
+  silentActions: Record<number, number[]>;          // 进阶职业 → 不播报的技能槽（见 11.4）
   partySort: PartySortSettings;
   manualOrders: ManualOrder[];
 }
@@ -711,6 +734,8 @@ interface Settings {
 |---|---|
 | `logline/parse` | 21/22 行字段解析；AOE 只取目标序号 0；33 行团灭指令；非法行返回 null |
 | `cooldown` | 单次冷却的倒计时；充能串行恢复（连用两层，第二层在 2×recast 后才回来）；0 层时仍然使用；`adjust` 缩短冷却；团灭重置；`recastMs` 变化后重新计算 |
+| `engine` | 释放识别、顶替动作、升级和等级同步；语音播报的触发时机、播报内容、按技能槽关闭 |
+| `overlay` | 内嵌模式调用处理器时总是带回调；未连接时不发送 |
 | `game/*` | 低级技能归一到最高级；按等级选版本；基础职业可用版本；复唱组；按等级取冷却、充能、持续时间 |
 | `game/levelValue` | 固定值；分段取值的边界等级 |
 | `party/sortParty` | 自己置顶；职能顺序自定义；按自己的职能切换预设；同职业兜底规则；手动覆盖生效和失效 |

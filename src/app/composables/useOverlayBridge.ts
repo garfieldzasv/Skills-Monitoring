@@ -1,5 +1,6 @@
 import { readonly, shallowRef } from "vue";
 import { STORAGE_PREFIX } from "@/core/settings/storage";
+import { urlParams } from "./useUrlParams";
 import { createPersisted, type Persisted } from "./usePersisted";
 
 /*
@@ -19,7 +20,10 @@ export interface LivePartySnapshot {
   updatedAt: number;
 }
 
-export type OverlayCommand = "castAll" | "reset";
+/** `sayTest` speaks a test phrase, to check ACT's TTS from the settings window. */
+export type OverlayCommand = "castAll" | "reset" | "sayTest";
+
+const COMMANDS: readonly OverlayCommand[] = ["castAll", "reset", "sayTest"];
 
 /** Edit-time preview switches, set from the settings window. */
 export interface PreviewFlags {
@@ -79,17 +83,24 @@ export function useLiveParty() {
 
 // ---------- commands (settings → overlay) ----------
 
+/**
+ * Sent from a settings window; it carries that window's profile (the overlay that opened it).
+ * The timestamp makes repeated identical commands still change the value (and fire events).
+ */
 export function sendOverlayCommand(command: OverlayCommand): void {
-  // The timestamp makes repeated identical commands still change the value (and fire events).
-  safeSet(COMMAND_KEY, JSON.stringify({ command, at: Date.now() }));
+  safeSet(COMMAND_KEY, JSON.stringify({ command, profile: urlParams.profile ?? null, at: Date.now() }));
 }
 
 export function onOverlayCommand(handler: (command: OverlayCommand) => void): void {
   window.addEventListener("storage", (e) => {
     if (e.key !== COMMAND_KEY || !e.newValue) return;
     try {
-      const { command } = JSON.parse(e.newValue) as { command: OverlayCommand };
-      if (command === "castAll" || command === "reset") handler(command);
+      const { command, profile } = JSON.parse(e.newValue) as { command: OverlayCommand; profile?: string | null };
+      if (!COMMANDS.includes(command)) return;
+      // A test phrase is for the overlay whose settings are open, like its announce switch;
+      // with two overlays open, the other one stays quiet.
+      if (command === "sayTest" && (profile ?? undefined) !== urlParams.profile) return;
+      handler(command);
     } catch {
       // ignore malformed values
     }

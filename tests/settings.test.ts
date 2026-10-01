@@ -49,6 +49,13 @@ describe("storage", () => {
     expect(loadSettings(memoryStore({ "skills-monitoring:settings": "{oops" }))).toEqual(defaultSettings());
   });
 
+  it("announcements are off by default, and every slot is announced once switched on", () => {
+    expect(validateLayout(undefined)).toMatchObject({ announce: false, announceText: "skill" });
+    expect(validateLayout({ announce: true, announceText: "nonsense" })).toMatchObject({ announce: true, announceText: "skill" });
+    expect(validateSettings(undefined).silentActions).toEqual({});
+    expect(validateSettings({ silentActions: { 19: [7535, "x", 7535], 21: [] } }).silentActions).toEqual({ 19: [7535] });
+  });
+
   it("clamps layout values", () => {
     expect(validateLayout({ iconSize: 9999, direction: "rtl" })).toMatchObject({ iconSize: 96, direction: "rtl" });
     expect(loadLayout(memoryStore(), "left").rowPitch).toBe(40);

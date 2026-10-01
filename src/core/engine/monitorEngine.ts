@@ -3,7 +3,7 @@ import { getJob, toAdvancedJob, type JobInfo } from "@/core/game/jobs";
 import { evalLevelValue } from "@/core/game/levelValue";
 import { resolveSkill, shownDuration, type ResolvedSkill } from "@/core/game/skillMeta";
 import { getAction } from "@/core/game/actions";
-import { recastKey, timerOwner } from "@/core/game/upgrades";
+import { recastKey, timerOwner, upgradeFamily } from "@/core/game/upgrades";
 import type { GameEventConsumer, GaugeContext } from "@/core/gauges/types";
 import { AbilityField, ActorControlField, LineType, WIPE_COMMANDS } from "@/core/logline/fields";
 import { eventTypeOfLine, parseLogLine, type GameEventType } from "@/core/logline/parse";
@@ -32,10 +32,18 @@ export interface EngineOptions {
 
 interface CastTarget {
   key: string;
-  /** See ResolvedSkill.effectOnTimerUse. */
-  effectOnTimerUse: boolean;
-  /** The member's level, for the effects of casts. */
-  level: number;
+  member: PartyMember;
+  /** Every slot of the member on this timer (usually one; e.g. 失血箭 and 死亡箭雨 share one). */
+  slots: ResolvedSkill[];
+}
+
+/** A watched slot was triggered by a real cast (see {@link MonitorEngine.onTrigger}). */
+export interface SkillTrigger {
+  member: PartyMember;
+  /** The slot as resolved for this member. */
+  skill: ResolvedSkill;
+  /** The action actually cast: a lower tier, a shared-timer sibling or a stand-in of the slot. */
+  castActionId: number;
 }
 
 /** One tracker entry per member and game recast timer (see {@link recastKey}). */
@@ -54,6 +62,7 @@ export class MonitorEngine {
   private settings: Settings;
   private rows: MemberRow[] = [];
   private readonly rowListeners = new Set<(rows: readonly MemberRow[]) => void>();
+  private readonly triggerListeners = new Set<(trigger: SkillTrigger) => void>();
 
   /** casterId → recast key → watched entry; the hot path for ability lines. */
   private castIndex = new Map<string, Map<string, CastTarget>>();
@@ -120,9 +129,9 @@ export class MonitorEngine {
     for (const c of this.consumers) c.reset();
   }
 
-  /** Demo helper: behaves exactly like seeing the cast in the log. */
+  /** Demo helper: behaves like seeing the cast in the log, except that it triggers nothing. */
   simulateCast(ownerId: string, actionId: number): void {
-    this.useSkill(ownerId.toUpperCase(), actionId);
+    this.useSkill(ownerId.toUpperCase(), actionId, true);
   }
 
   // ---------- outputs ----------
@@ -136,6 +145,17 @@ export class MonitorEngine {
     return () => this.rowListeners.delete(listener);
   }
 
+  /**
+   * A watched slot was triggered: the cast that starts the slot's effect, or for a slot without
+   * a separate effect source, the cast that spends its timer. Exactly the casts the overlay shows
+   * as "just used" (e.g. 四色技巧舞步结束, not the 技巧舞步 before it). Simulated casts are not
+   * reported.
+   */
+  onTrigger(listener: (trigger: SkillTrigger) => void): () => void {
+    this.triggerListeners.add(listener);
+    return () => this.triggerListeners.delete(listener);
+  }
+
   // ---------- internals ----------
 
   private handleAbility(line: readonly string[]): void {
@@ -147,20 +167,33 @@ export class MonitorEngine {
     if (Number.isFinite(actionId)) this.useSkill(sourceId.toUpperCase(), actionId);
   }
 
-  private useSkill(ownerId: string, actionId: number): void {
+  private useSkill(ownerId: string, actionId: number, simulated = false): void {
     const action = getAction(actionId);
     const target = action && this.castIndex.get(ownerId)?.get(recastKey(actionId)!);
     if (!target) return;
-    if (timerOwner(action) === action) {
-      this.cooldowns.use(target.key, this.now(), target.effectOnTimerUse);
-      return;
+    const standIn = timerOwner(action) !== action;
+    // Several slots on one timer: the cast belongs to the slot of its own upgrade chain, else to
+    // a slot showing the same kind of action (a stand-in, or the timer's own action).
+    const slot =
+      target.slots.find((s) => upgradeFamily(s.actionId).includes(actionId)) ??
+      target.slots.find((s) => s.effectOnTimerUse !== standIn) ??
+      target.slots[0]!;
+    const { effectOnTimerUse } = slot;
+    let triggered: boolean;
+    if (!standIn) {
+      this.cooldowns.use(target.key, this.now(), effectOnTimerUse);
+      triggered = effectOnTimerUse;
+    } else {
+      // A stand-in (e.g. 四色技巧舞步结束) does not spend the timer: the action whose button it
+      // replaces already did. For a slot that shows a stand-in, a stand-in with an effect of its
+      // own starts the countdown (any of the four finishes; not 提拉纳, which has none).
+      const level = target.member.level || 100;
+      triggered = !effectOnTimerUse && evalLevelValue(shownDuration(action), level) > 0;
+      if (triggered) this.cooldowns.startEffect(target.key, this.now());
     }
-    // A stand-in (e.g. 四色技巧舞步结束) does not spend the timer: the action whose button it
-    // replaces already did. For a slot that shows a stand-in, a stand-in with an effect of its
-    // own starts the countdown (any of the four finishes; not 提拉纳, which has none).
-    if (!target.effectOnTimerUse && evalLevelValue(shownDuration(action), target.level) > 0) {
-      this.cooldowns.startEffect(target.key, this.now());
-    }
+    if (!triggered || simulated) return;
+    const trigger: SkillTrigger = { member: target.member, skill: slot, castActionId: actionId };
+    for (const l of this.triggerListeners) l(trigger);
   }
 
   private rebuild(): void {
@@ -183,7 +216,9 @@ export class MonitorEngine {
         const { recastMs, maxCharges, durationMs } = skill;
         this.cooldowns.ensure(key, { recastMs, maxCharges, durationMs }, now);
         keys.add(key);
-        byRecast.set(skill.recastKey, { key, effectOnTimerUse: skill.effectOnTimerUse, level });
+        const target = byRecast.get(skill.recastKey);
+        if (target) target.slots.push(skill);
+        else byRecast.set(skill.recastKey, { key, member, slots: [skill] });
         return { skill, key };
       });
       castIndex.set(member.id, byRecast);

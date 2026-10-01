@@ -1,11 +1,12 @@
 import { computed, ref, shallowReactive, shallowRef, watch } from "vue";
 import type { CooldownState } from "@/core/cooldown/cooldownTracker";
+import { announcementOf, isSilenced } from "@/core/engine/announce";
 import { DEMO_PARTY, DEMO_SELF_ID } from "@/core/engine/demoParty";
 import { MonitorEngine, type MemberRow } from "@/core/engine/monitorEngine";
-import { addOverlayListener } from "@/core/overlay/overlayApi";
+import { addOverlayListener, say } from "@/core/overlay/overlayApi";
 import type { PartyMember } from "@/core/party/sortParty";
 import { onOverlayCommand, publishLiveParty } from "./useOverlayBridge";
-import { useSettings } from "./useSettings";
+import { useLayout, useSettings } from "./useSettings";
 
 /**
  * Vue adapter around the framework-agnostic engine. Created once, by the overlay page.
@@ -26,6 +27,15 @@ function createMonitor() {
   const rows = shallowRef<readonly MemberRow[]>(engine.getRows());
   engine.onRowsChange((next) => (rows.value = next));
   watch(settings.state, (s) => engine.setSettings(s));
+
+  // The switch lives in this overlay's layout, so a second overlay (?profile=) stays quiet
+  // unless it is switched on there too.
+  const layout = useLayout();
+  engine.onTrigger((trigger) => {
+    const { announce, announceText } = layout.state.value;
+    if (!announce || isSilenced(trigger, settings.state.value.silentActions)) return;
+    say(announcementOf(trigger, announceText));
+  });
 
   // The real party/self are kept while the demo party is shown, and restored afterwards.
   const realParty = shallowRef<PartyMember[]>([]);
@@ -69,7 +79,11 @@ function createMonitor() {
       }
     }
   }
-  onOverlayCommand((command) => (command === "castAll" ? castAll() : engine.reset()));
+  onOverlayCommand((command) => {
+    if (command === "castAll") castAll();
+    else if (command === "reset") engine.reset();
+    else say("语音播报测试");
+  });
 
   return {
     rows,

@@ -3,11 +3,13 @@ import { isValidLevelValue } from "@/core/game/levelValue";
 import type { SkillOverride } from "@/core/game/skillMeta";
 import { MAX_MANUAL_ORDERS, type ManualOrder, type PartySortSettings, type SortPreset } from "@/core/party/sortParty";
 import {
+  ANNOUNCE_TEXTS,
   defaultLayout,
   defaultPartySort,
   defaultWatchActions,
   LAYOUT_LIMITS,
   SETTINGS_VERSION,
+  type AnnounceText,
   type LayoutSettings,
   type Settings,
 } from "./schema";
@@ -98,12 +100,25 @@ function validateManualOrders(v: unknown): ManualOrder[] {
     .slice(0, MAX_MANUAL_ORDERS);
 }
 
+/** Like watchActions, but a missing job simply means "nothing silenced". */
+function validateSilentActions(v: unknown): Record<number, number[]> {
+  const result: Record<number, number[]> = {};
+  if (!isObj(v)) return result;
+  for (const [job, list] of Object.entries(v)) {
+    const jobId = posInt(Number(job));
+    const ids = validateActionList(list);
+    if (jobId !== undefined && ids.length > 0) result[jobId] = ids;
+  }
+  return result;
+}
+
 export function validateSettings(v: unknown): Settings {
   const o = isObj(v) ? v : {};
   return {
     version: SETTINGS_VERSION,
     watchActions: validateWatchActions(o.watchActions),
     skillOverrides: validateOverrides(o.skillOverrides),
+    silentActions: validateSilentActions(o.silentActions),
     partySort: validatePartySort(o.partySort),
     manualOrders: validateManualOrders(o.manualOrders),
   };
@@ -127,5 +142,7 @@ export function validateLayout(v: unknown): LayoutSettings {
     textScale: num("textScale"),
     opacity: num("opacity"),
     showDuration: typeof o.showDuration === "boolean" ? o.showDuration : d.showDuration,
+    announce: typeof o.announce === "boolean" ? o.announce : d.announce,
+    announceText: ANNOUNCE_TEXTS.includes(o.announceText as AnnounceText) ? (o.announceText as AnnounceText) : d.announceText,
   };
 }

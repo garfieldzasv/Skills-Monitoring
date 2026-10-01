@@ -27,10 +27,26 @@ const items = computed({
   set: (list) => setSlots(list.map((x) => x.id)),
 });
 
+/** Slots are announced unless listed here; entries for removed slots are dropped. */
 function setSlots(ids: number[]) {
   const job = selectedJob.value;
   settings.update((d) => {
     d.watchActions[job] = ids;
+    const silent = (d.silentActions[job] ?? []).filter((id) => ids.includes(id));
+    if (silent.length > 0) d.silentActions[job] = silent;
+    else delete d.silentActions[job];
+  });
+}
+
+const silent = computed(() => settings.state.value.silentActions[selectedJob.value] ?? []);
+
+function setAnnounced(id: number, announced: boolean) {
+  const job = selectedJob.value;
+  settings.update((d) => {
+    const next = (d.silentActions[job] ?? []).filter((x) => x !== id);
+    if (!announced) next.push(id);
+    if (next.length > 0) d.silentActions[job] = next;
+    else delete d.silentActions[job];
   });
 }
 
@@ -84,6 +100,14 @@ function pick(id: number) {
             <div>{{ item.name }}</div>
             <div class="muted">{{ item.detail }}</div>
           </div>
+          <label class="announce" title="开启「布局 → 语音播报」后，释放这个技能时播报">
+            <input
+              type="checkbox"
+              :checked="!silent.includes(item.id)"
+              @change="setAnnounced(item.id, ($event.target as HTMLInputElement).checked)"
+            />
+            播报
+          </label>
           <button type="button" class="btn danger" @click="setSlots(slots.filter((x) => x !== item.id))">移除</button>
         </div>
       </VueDraggable>
@@ -166,13 +190,22 @@ h4 {
 
 .slot {
   display: grid;
-  grid-template-columns: 16px 36px 1fr auto;
+  grid-template-columns: 16px 36px 1fr auto auto;
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg);
+}
+
+.announce {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .handle {

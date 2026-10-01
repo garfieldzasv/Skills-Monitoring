@@ -1,8 +1,8 @@
 import type { OverlayEventName, OverlayHandler } from "./events";
 
 /**
- * Minimal OverlayPlugin client (replaces cactbot's overlay_plugin_api.ts). The app only ever
- * subscribes to events, so that is all this supports.
+ * Minimal OverlayPlugin client: subscribes to events, and calls handlers that need no reply
+ * (`say` for ACT's text-to-speech).
  *
  * - Embedded (inside an ACT overlay): requests go through the injected `window.OverlayPluginApi`
  *   and events arrive via `window.__OverlayCallback`.
@@ -47,20 +47,39 @@ export function getConnectionMode(): ConnectionMode {
   return window.OverlayPluginApi ? "embedded" : "none";
 }
 
-function subscribe(events: string[]): void {
-  if (!connected || events.length === 0) return;
-  const msg = JSON.stringify({ call: "subscribe", events });
+type HandlerCall = { call: string; [key: string]: unknown };
+
+function send(msg: HandlerCall): void {
+  const text = JSON.stringify(msg);
   if (ws) {
-    ws.send(msg);
+    ws.send(text);
     return;
   }
-  const result = window.OverlayPluginApi?.callHandler(msg, () => {}) as
+  const result = window.OverlayPluginApi?.callHandler(text, () => {}) as
     | { catch?: (onRejected: (err: unknown) => void) => unknown }
     | undefined;
   // Thenable check rather than instanceof: the promise comes from CefSharp's binding layer.
   if (typeof result?.catch === "function") {
-    result.catch((err) => console.error("[overlay] subscribe failed", err));
+    result.catch((err) => console.error(`[overlay] ${msg.call} failed`, err));
   }
+}
+
+function subscribe(events: string[]): void {
+  if (!connected || events.length === 0) return;
+  send({ call: "subscribe", events });
+}
+
+/**
+ * Calls an OverlayPlugin handler whose reply is not needed. Dropped while not connected: these
+ * are momentary effects (speech), not state that must arrive later.
+ */
+export function callOverlayHandler(msg: HandlerCall): void {
+  if (connected) send(msg);
+}
+
+/** Speaks through ACT's text-to-speech (OverlayPlugin `say` → ActGlobals.oFormActMain.TTS). */
+export function say(text: string): void {
+  if (text) callOverlayHandler({ call: "say", text });
 }
 
 function dispatch(msg: { type: string }): void {

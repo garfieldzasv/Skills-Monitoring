@@ -11,6 +11,8 @@ export interface Settings {
   watchActions: Record<number, number[]>;
   /** User corrections per action ID. */
   skillOverrides: Record<number, SkillOverride>;
+  /** Advanced job → slot action IDs that are not announced (every slot is, by default). */
+  silentActions: Record<number, number[]>;
   partySort: PartySortSettings;
   manualOrders: ManualOrder[];
 }
@@ -27,7 +29,15 @@ export interface LayoutSettings {
   textScale: number;
   opacity: number;
   showDuration: boolean;
+  /** Speak watched skills through ACT's TTS. Per overlay, so two overlays do not both speak. */
+  announce: boolean;
+  announceText: AnnounceText;
 }
+
+/** What is spoken when a watched skill is used. */
+export type AnnounceText = "skill" | "jobAndSkill" | "memberAndSkill";
+
+export const ANNOUNCE_TEXTS: readonly AnnounceText[] = ["skill", "jobAndSkill", "memberAndSkill"];
 
 export const LAYOUT_LIMITS = {
   iconSize: { min: 12, max: 96, step: 1 },
@@ -58,6 +68,7 @@ export function defaultSettings(): Settings {
     version: SETTINGS_VERSION,
     watchActions: defaultWatchActions(),
     skillOverrides: {},
+    silentActions: {},
     partySort: defaultPartySort(),
     manualOrders: [],
   };
@@ -74,5 +85,7 @@ export function defaultLayout(): LayoutSettings {
     textScale: 1,
     opacity: 1,
     showDuration: true,
+    announce: false,
+    announceText: "skill",
   };
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { LAYOUT_LIMITS, defaultLayout, type LayoutSettings } from "@/core/settings/schema";
+import { LAYOUT_LIMITS, defaultLayout, type AnnounceText, type LayoutSettings } from "@/core/settings/schema";
+import { sendOverlayCommand } from "@/app/composables/useOverlayBridge";
 import { useLayout } from "@/app/composables/useSettings";
 
 const layout = useLayout();
@@ -21,6 +22,12 @@ function set<K extends keyof LayoutSettings>(key: K, value: LayoutSettings[K]) {
     d[key] = value;
   });
 }
+
+const ANNOUNCE_TEXT_LABEL: Record<AnnounceText, string> = {
+  skill: "技能名（雪仇）",
+  jobAndSkill: "职业 + 技能名（骑士 雪仇）",
+  memberAndSkill: "队员名 + 技能名",
+};
 
 function onNumber(key: NumericKey, e: Event) {
   const value = Number((e.target as HTMLInputElement).value);
@@ -69,6 +76,28 @@ function onNumber(key: NumericKey, e: Event) {
         @change="set('showDuration', ($event.target as HTMLInputElement).checked)"
       />
     </label>
+    <label class="field">
+      <span class="label">语音播报</span>
+      <input
+        type="checkbox"
+        :checked="layout.state.value.announce"
+        @change="set('announce', ($event.target as HTMLInputElement).checked)"
+      />
+    </label>
+    <label class="field">
+      <span class="label">播报内容</span>
+      <select
+        :value="layout.state.value.announceText"
+        :disabled="!layout.state.value.announce"
+        @change="set('announceText', ($event.target as HTMLSelectElement).value as AnnounceText)"
+      >
+        <option v-for="(label, value) in ANNOUNCE_TEXT_LABEL" :key="value" :value="value">{{ label }}</option>
+      </select>
+      <button type="button" class="btn" @click="sendOverlayCommand('sayTest')">试听</button>
+    </label>
+    <p class="hint">
+      监视的技能释放时，通过 ACT 的 TTS 播报。只对这个悬浮窗生效；每个技能可以在「技能槽」里单独关闭。
+    </p>
     <p class="hint">行距 = 游戏小队列表中第 1 人到第 8 人的距离 ÷ 7。</p>
     <button type="button" class="btn" @click="layout.replace(defaultLayout())">恢复默认布局</button>
   </div>

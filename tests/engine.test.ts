@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { viewAt } from "@/core/cooldown/cooldownTracker";
-import { cooldownKey, MonitorEngine } from "@/core/engine/monitorEngine";
+import { announcementOf, isSilenced } from "@/core/engine/announce";
+import { cooldownKey, MonitorEngine, type SkillTrigger } from "@/core/engine/monitorEngine";
 import { recastKey } from "@/core/game/upgrades";
 import type { GameEventConsumer } from "@/core/gauges/types";
 import { defaultSettings } from "@/core/settings/schema";
@@ -176,5 +177,96 @@ describe("MonitorEngine", () => {
     advance(7_000);
     engine.handleLogLine(ability("10000006", 16193)); // a one-step finish is the same buff
     expect(state()).toMatchObject({ activeUntil: at() + 20_000 });
+  });
+
+  describe("triggers (for announcements)", () => {
+    function collect(engine: MonitorEngine) {
+      const triggers: SkillTrigger[] = [];
+      engine.onTrigger((t) => triggers.push(t));
+      return triggers;
+    }
+
+    it("fires for a real cast of a watched skill, with the member and the cast action", () => {
+      const { engine } = setup();
+      const triggers = collect(engine);
+      engine.handleLogLine(ability("10000002", 7535)); // PLD 雪仇
+      engine.handleLogLine(ability("10000002", 9)); // unwatched
+      engine.handleLogLine(ability("10009999", 7535)); // not in the party
+      expect(triggers.map((t) => [t.member.id, t.skill.slotActionId, t.castActionId])).toEqual([["10000002", 7535, 7535]]);
+    });
+
+    it("fires on every cast of a charge skill", () => {
+      const { engine } = setup();
+      const settings = defaultSettings();
+      settings.watchActions[35] = [7518];
+      engine.setSettings(settings);
+      engine.setParty([{ id: "10000004", name: "Rdm", job: 35, level: 100 }]);
+      const triggers = collect(engine);
+      engine.handleLogLine(ability("10000004", 7518));
+      engine.handleLogLine(ability("10000004", 7518));
+      expect(triggers).toHaveLength(2);
+    });
+
+    it("a stand-in's slot fires when its effect starts, not when the timer is spent", () => {
+      const { engine } = setup();
+      engine.setParty([{ id: "10000006", name: "Dnc", job: 38, level: 100 }]); // 四色技巧舞步结束 slot
+      const triggers = collect(engine);
+      engine.handleLogLine(ability("10000006", 15998)); // 技巧舞步
+      expect(triggers).toHaveLength(0);
+      engine.handleLogLine(ability("10000006", 16193)); // 单色技巧舞步结束
+      engine.handleLogLine(ability("10000006", 25790)); // 提拉纳: no effect of its own
+      expect(triggers.map((t) => t.castActionId)).toEqual([16193]);
+    });
+
+    it("slots sharing a timer: each cast belongs to its own slot", () => {
+      const { engine } = setup();
+      const settings = defaultSettings();
+      settings.watchActions[23] = [110, 117]; // 失血箭 (→ 碎心箭) and 死亡箭雨 share one timer
+      settings.watchActions[38] = [15998, 16196]; // 技巧舞步 and the finish it turns into
+      engine.setSettings(settings);
+      engine.setParty([
+        { id: "10000001", name: "Brd", job: 23, level: 100 },
+        { id: "10000006", name: "Dnc", job: 38, level: 100 },
+      ]);
+      const triggers = collect(engine);
+      engine.handleLogLine(ability("10000001", 36975)); // 碎心箭
+      engine.handleLogLine(ability("10000001", 117)); // 死亡箭雨
+      engine.handleLogLine(ability("10000006", 15998)); // 技巧舞步
+      engine.handleLogLine(ability("10000006", 16196)); // 四色技巧舞步结束
+      expect(triggers.map((t) => [t.skill.slotActionId, t.castActionId])).toEqual([
+        [110, 36975],
+        [117, 117],
+        [15998, 15998],
+        [16196, 16196],
+      ]);
+      // Silencing one of them leaves the other one announced.
+      expect(triggers.map((t) => isSilenced(t, { 23: [117] }))).toEqual([false, true, false, false]);
+    });
+
+    it("simulated casts (demo) fire nothing", () => {
+      const { engine } = setup();
+      const triggers = collect(engine);
+      engine.simulateCast("10000002", 7535);
+      expect(triggers).toHaveLength(0);
+      expect(stateOf(engine, "10000002", 7535)!.lastUsedAt).toBe(0); // the cooldown still runs
+    });
+
+    it("builds the spoken text and honours per-slot silencing", () => {
+      const { engine } = setup();
+      const triggers = collect(engine);
+      engine.handleLogLine(ability("10000002", 7535));
+      engine.setParty([{ id: "10000006", name: "Dnc", job: 38, level: 100 }]);
+      engine.handleLogLine(ability("10000006", 15998));
+      engine.handleLogLine(ability("10000006", 16193));
+      const [reprisal, finish] = triggers as [SkillTrigger, SkillTrigger];
+      expect(announcementOf(reprisal, "skill")).toBe("雪仇");
+      expect(announcementOf(reprisal, "jobAndSkill")).toBe("骑士 雪仇");
+      expect(announcementOf(reprisal, "memberAndSkill")).toBe("Tank 雪仇");
+      expect(announcementOf(finish, "skill")).toBe("单色技巧舞步结束"); // what was cast, not the slot
+      expect(isSilenced(reprisal, { 19: [7535] })).toBe(true);
+      expect(isSilenced(reprisal, { 21: [7535] })).toBe(false);
+      // A base class uses its job's list, like the slots themselves.
+      expect(isSilenced({ ...reprisal, member: { ...reprisal.member, job: 1 } }, { 19: [7535] })).toBe(true);
+    });
   });
 });
