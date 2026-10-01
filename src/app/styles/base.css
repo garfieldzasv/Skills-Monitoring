@@ -1,0 +1,79 @@
+:root {
+  --bg: #1b1e24;
+  --panel: #23272f;
+  --border: #3a404c;
+  --text: #e6e8ec;
+  --text-muted: #9aa1ad;
+  --accent: #5b9cff;
+  --danger: #e5534b;
+  --role-tank: #6fa8ff;
+  --role-healer: #6fd08c;
+  --role-dps: #f07a7a;
+
+  color-scheme: dark;
+  font-family: system-ui, "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 13px;
+}
+
+html,
+body {
+  margin: 0;
+  /* The overlay must stay transparent; the settings page paints its own background. */
+  background: transparent;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+input,
+select,
+textarea {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+input[type="range"] {
+  padding: 0;
+}
+
+.btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn.primary {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 25%, var(--bg));
+}
+
+.btn.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: #ffb3ae;
+}
+
+code {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--bg);
+}

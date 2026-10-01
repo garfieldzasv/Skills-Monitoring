@@ -1,0 +1,11 @@
+node_modules/
+dist/
+release/
+*.log
+.DS_Store
+
+# Game icons copied from a local unpack; never committed, only packed into release builds.
+public/icons/
+
+# The icon copy script only works against a local unpack, like the icons themselves.
+scripts/copy-icons.ts
