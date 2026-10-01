@@ -1,65 +1,77 @@
 # Skills Monitoring · 小队技能监控
 
-ACT + OverlayPlugin 悬浮窗：每个队员一行，和游戏小队列表对齐，显示团减、团辅等关键技能的冷却、充能和持续时间。
+FF14 的 ACT 悬浮窗，每个队员一行，和游戏的小队列表对齐，显示团减、团辅等关键技能的冷却、充能次数和效果时间。
 
-技能数据来自游戏客户端（FINAL FANTASY XIV © SQUARE ENIX）。设计说明见 [docs/DESIGN.md](docs/DESIGN.md)。
+## 安装
 
-## 使用
+1. 在 OverlayPlugin 里新建一个 MiniParse 类型的悬浮窗
+2. URL 填：
 
-在 OverlayPlugin 里新建一个“自定义悬浮窗”（MiniParse 类型），网址填以下任意一种：
+   ```
+   https://garfieldzasv.github.io/Skills-Monitoring/
+   ```
 
-```
-https://<用户名>.github.io/<仓库名>/           # GitHub Pages
-file:///<解压目录>/index.html                     # 解压发布包后直接用本地文件
-```
+3. 把悬浮窗放到游戏小队列表旁边，拉到能放下 8 行的大小
+4. 关掉这个悬浮窗的「鼠标穿透 / Enable clickthru」，在悬浮窗上右键，打开设置页
 
-发布包 `skills-monitoring-v*.zip` 解压后就是完整的站点，包括图标，不需要网络，也不需要本地服务器。
+不想依赖网络的话，到 [Releases](https://github.com/garfieldzasv/Skills-Monitoring/releases) 下载 zip 解压。较新的 OverlayPlugin 在 URL 输入框旁边有个 `...` 按钮，点它直接选中解压出来的 `index.html` 就行；老版本则手动填 `index.html` 的完整 `file://` 地址。本地和在线是同一份产物，图标都打包在里面，运行时不访问网络。
 
-悬浮窗只显示技能图标。解锁时会显示一圈虚线边框，方便调整窗口大小。
+在普通浏览器里调试时，URL 后面加 `?OVERLAY_WS=ws://127.0.0.1:10501/ws`，通过 OverlayPlugin 的 WebSocket 服务连接 ACT（需要先在 OverlayPlugin 里开启）。
 
-- **设置页**：在悬浮窗上**右键**打开。设置保存在 ACT 内置浏览器的 localStorage 里，所以**不要用系统浏览器打开设置页**，那边的修改传不到 ACT 里的悬浮窗。需要在两边之间搬运设置时，用“导入导出”。
-- **对齐**：解锁悬浮窗，在设置页“布局”里勾选“显示校准网格”，调整“行距”和偏移，直到 8 条色带和游戏小队列表的 8 格重合。行距 = 游戏里第 1 人到第 8 人的距离 ÷ 7。没有小队时，解锁后会自动显示演示小队。
-- **排序**：在设置页的“小队排序”里，照游戏的“小队列表排序”设置好三套预设。个别对不上时（比如同职业），在同一页上方的“当前小队的顺序”里上下调整，会按当前小队记住。
-- **换地址会丢设置**：GitHub Pages 地址和本地文件地址的 localStorage 互相独立。换地址前先导出设置，换完再导入。布局需要重新校准。
-- **多个悬浮窗**：网址加 `?profile=left` 这类参数，每个悬浮窗使用独立的布局。
-- 锁定后悬浮窗没有任何点击交互，可以在 OverlayPlugin 里开启鼠标穿透。
+## 功能
 
-## 开发
+右键打开设置页，所有改动即时生效并自动保存。
+
+* 每个队员一行，顺序和游戏小队列表一致：自己置顶，职能和职业顺序可自定义，坦克、治疗、输出三套预设随自己的职能切换
+* 规则排不准的时候（比如同职业），可以手动调整顺序，按小队记住
+* 默认监视团减和团辅，防护职业加上无敌，治疗和法系加上即刻咏唱；每个职业的技能槽都能增删、拖动排序
+* 冷却倒计时和扫光遮罩；充能技能显示剩余次数，后续释放只减次数，不打断正在恢复的那一层
+* 效果期间显示金色的剩余时间，可关
+* 按队员等级取值：没学会的技能留空占位，冷却、次数、持续时间随等级变化，升级或等级同步时自动更新
+* 低级版本和升级后的版本、共享复唱的技能算同一个冷却
+* 布局：图标尺寸、行距、间距、偏移、排列方向、文字缩放、不透明度，带校准网格
+* 解锁时没有小队就显示演示小队，可以一键模拟全部释放
+* 团灭和换区时自动重置
+* 多个悬浮窗可以各用一套布局，URL 加 `?profile=left` 这类参数
+* 设置导入导出
+* 技能数据来自游戏客户端，不请求任何第三方地址，也没有统计代码
+
+## 对齐和排序
+
+1. 解锁悬浮窗，在设置页「布局」里勾选「显示校准网格」，调整「行距」和偏移，直到 8 条色带和游戏小队列表的 8 格重合。行距 = 游戏里第 1 人到第 8 人的距离 ÷ 7
+2. 在设置页「小队排序」里，照游戏的「小队列表排序」设好三套预设
+3. 个别对不上时，在同一页上方的「当前小队的顺序」里上下调整
+
+## 常见问题
+
+**右键没反应。** 确认「鼠标穿透 / Enable clickthru」是关闭的。锁定后悬浮窗没有任何点击交互，平时开着穿透也不影响游戏，要改设置时再关掉。也可以临时在 URL 末尾加 `#/settings`，直接在悬浮窗里打开设置页。
+
+**设置页改了，悬浮窗没变。** 设置页要在 ACT 里打开（右键弹出的那个窗口）。用系统浏览器打开的设置页和 ACT 的存储是分开的，改了传不过去。需要在两边之间搬运设置时，用「导入导出」。
+
+**换了地址，设置全没了。** 在线地址和本地文件地址的设置互相独立。换之前先导出，换完再导入；布局需要重新校准。
+
+**同职业两个人的顺序反了。** 在「小队排序」里切换同职业的 ActorID 方向，或者直接手动调整顺序。
+
+**某个队员一行是空的。** 等级不够、还没学会的技能会留空占位。青魔法师和驯兽师暂不支持，这一行只占位置，不显示技能。
+
+其他问题和建议请 [开 issue](https://github.com/garfieldzasv/Skills-Monitoring/issues)。
+
+## 构建
+
+需要 Node.js 和 pnpm。
 
 ```bash
 pnpm install
-pnpm copy-icons          # 从本机解包复制图标到 public/icons/（脚本和图标都只在本机，不在仓库里）
-pnpm dev                 # 浏览器打开 http://localhost:5173/?demo=1 使用演示小队
-pnpm test                # 核心逻辑单元测试
-pnpm typecheck
+pnpm dev     # 浏览器打开 http://localhost:5173/?demo=1 看演示小队
+pnpm test
 ```
 
-在普通浏览器里连接真实的 ACT：网址加 `?OVERLAY_WS=ws://127.0.0.1:10501/ws`（需在 OverlayPlugin 里开启 WebSocket 服务）。
+游戏图标不在仓库里，打发布包需要本机的图标解包，流程见 [DESIGN.md](docs/DESIGN.md) 第 5.5、14 节。技能数据用 `pnpm import-data` 重新生成，推导规则见第 5.1 节。
 
-### 更新游戏数据
+## 许可与来源
 
-```bash
-pnpm import-data                                  # 默认取最新版本
-pnpm import-data --xivapi 7.56x1 --cn <commit>    # 指定版本
-```
+MIT，见 [LICENSE](LICENSE)。
 
-从游戏客户端数据生成 `src/data/generated/actions.json`：数值来自 [XIVAPI](https://v2.xivapi.com)（国际服），中文名和带等级宏的技能说明来自 [ffxiv-datamining-cn](https://github.com/thewakingsands/ffxiv-datamining-cn)（国服）。按等级变化的冷却、充能、持续时间从技能说明和特性说明推导，规则见 [DESIGN.md §5.1](docs/DESIGN.md)。脚本会打印和上次结果的差异，遇到处理不了的情况会列出来并停止，不写文件。
+技能数据由 `scripts/import-game-data.ts` 从游戏客户端数据生成：数值来自 [XIVAPI](https://v2.xivapi.com)（国际服），中文名和技能说明来自 [ffxiv-datamining-cn](https://github.com/thewakingsands/ffxiv-datamining-cn)（国服）。
 
-### 发布
-
-```bash
-pnpm release                          # 复制图标 → 测试 → 构建 → release/skills-monitoring-v<版本>.zip
-pnpm release --publish --repo owner/name   # 同时创建 GitHub Release（需要 gh CLI）
-```
-
-Release 发布后，`.github/workflows/deploy.yml` 会下载发布包并部署到 GitHub Pages（仓库设置里 Pages 的来源选 GitHub Actions）。图标只存在于发布包里，不进 git。
-
-## 目录
-
-| 路径          | 内容                                                                           |
-| ------------- | ------------------------------------------------------------------------------ |
-| `src/core/` | 纯 TypeScript 核心逻辑，不依赖 Vue：日志解析、冷却状态机、小队排序、设置、引擎 |
-| `src/app/`  | Vue 界面：悬浮窗、设置页                                                       |
-| `src/data/` | 生成的游戏数据 + 手写的默认配置                                                |
-| `scripts/`  | 数据导入、复制图标、发布                                                       |
-| `tests/`    | 单元测试                                                                       |
+技能图标和职业图标取自 FINAL FANTASY XIV。FINAL FANTASY 是 Square Enix Holdings Co., Ltd. 的注册商标，本项目与 Square Enix 无关联，也未获其背书。
