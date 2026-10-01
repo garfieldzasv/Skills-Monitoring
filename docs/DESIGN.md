@@ -735,7 +735,7 @@ interface Settings {
 
 - **仓库私有只能保护源码，站点本身一定是公开的。** Enterprise Cloud 的“私有站点”需要登录 GitHub 才能访问，但 OverlayPlugin 的悬浮窗加载网址时不会带 GitHub 登录状态，所以实际上用不了。也就是说，打包后的 JS 和图标，任何知道网址的人都能下载。
 - **如果账号是 Free**：可以用“私有源码仓库 + 公开发布仓库”的组合。源码仓库保持私有，只把构建产物发布到另一个公开仓库的 Pages。效果和 Pro 一样，不用付费。
-- 本机没有安装 `gh`，查不到你账号的套餐，需要你自己确认一下（GitHub → Settings → Billing and plans）。
+- **本项目的做法**：源码仓库 [garfieldzasv/Skills-Monitoring](https://github.com/garfieldzasv/Skills-Monitoring) 本身是公开的，Pages 直接从这个仓库部署，站点是 <https://garfieldzasv.github.io/Skills-Monitoring/>。
 
 参考资料：[GitHub Docs：Creating a GitHub Pages site](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site)、[GitHub Docs：Changing the visibility of your GitHub Pages site](https://docs.github.com/en/enterprise-cloud@latest/pages/getting-started-with-github-pages/changing-the-visibility-of-your-github-pages-site)
 
@@ -761,7 +761,12 @@ GitHub Actions（Release 发布时触发）
 - 每个版本都有一个完整的发布包，想回滚只要对旧的 Release 重新运行一次部署；
 - 部署步骤在 Actions 里，不需要在本机配置 Pages 相关的权限。
 
-第 4 步需要本机安装并登录 `gh` CLI，也可以在 GitHub 网页上手动创建 Release 并上传 zip。
+第 4 步需要本机安装并登录 `gh` CLI，也可以在 GitHub 网页上手动创建 Release 并上传 zip。先建草稿、上传附件后再发布，可以避免 workflow 在附件上传完之前就开始运行。
+
+仓库需要一次性设置两项：
+
+- Settings → Pages 的来源选 **GitHub Actions**。新建的仓库可能默认是“从分支部署”，那样站点上放的是源码里的开发用 `index.html`，页面跑不起来。
+- Settings → Environments → `github-pages` 的部署规则里加上标签 `v*`。这个环境默认只允许 `main` 分支部署，而 Release 触发的运行是在标签上，不加规则会被拦下。
 
 如果采用“私有源码仓库 + 公开发布仓库”的组合，部署 workflow 放在公开发布仓库里，从私有仓库的 Release 下载附件（需要一个有读权限的 token，存在发布仓库的 Secrets 里）；也可以直接把 Release 建在公开发布仓库上。
 
@@ -794,7 +799,7 @@ GitHub Actions（Release 发布时触发）
 | 游戏能否按自己的职能分别设置排序 | 能 | 9.2：三套独立预设 |
 | 图标是否提交 | 放在仓库目录里但不提交，发布时打进发布包 | 5.5、14.2 |
 | 默认技能槽 | 以团减和团辅为主；防护加无敌；治疗和法系加即刻咏唱 | 5.3 |
-| 发布仓库 | 暂定“私有源码仓库 + 公开发布仓库”，实现完成、发布时再最终确定 | 14 |
+| 发布仓库 | 公开的源码仓库直接部署 Pages；构建产物以 Release 附件发布，不提交构建目录（产物里有图标，图标不进 git） | 14 |
 | 同职业的 ActorID 方向 | 先按默认值 `actorIdDesc` 实现，遇到实际情况再核实修改 | 9.3 |
 | 点击技能发送到小队频道 | 不做 | 1、11.1 |
 | 部署方式 | GitHub Pages | 14 |
@@ -803,9 +808,8 @@ GitHub Actions（Release 发布时触发）
 
 ### 15.2 待定（不阻塞实现）
 
-1. **发布仓库的最终方案**：实现完成、第一次发布时确定。
-2. **同职业的 ActorID 方向**：实战遇到同职业时核实。
-3. **青魔法师**：和驯兽师一样暂不支持，需要时再提。
+1. **同职业的 ActorID 方向**：实战遇到同职业时核实。
+2. **青魔法师**：和驯兽师一样暂不支持，需要时再提。
 
 ---
 

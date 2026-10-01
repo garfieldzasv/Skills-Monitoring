@@ -7,7 +7,10 @@
 # If the site is served from a separate public repository, copy this file there and create the
 # releases in that repository (`pnpm release --publish --repo owner/public-repo`).
 #
-# Repository settings → Pages → Source: "GitHub Actions".
+# One-time repository settings:
+#   - Pages → Source: "GitHub Actions" (a new repository may start on "Deploy from a branch").
+#   - Environments → github-pages → Deployment branches and tags: add the tag rule `v*`.
+#     The environment only allows `main` by default, and a release-triggered run is on its tag.
 name: Deploy to GitHub Pages
 
 on:
