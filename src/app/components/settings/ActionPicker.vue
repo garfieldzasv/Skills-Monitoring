@@ -22,12 +22,15 @@ interface PickerItem {
   charges: number;
 }
 
-/** Actions this job can use, top tier of each upgrade chain only (lower tiers resolve by level). */
+/**
+ * Actions this job can use, as the game's Actions & Traits list shows them, top tier of each
+ * upgrade chain only (lower tiers resolve by level).
+ */
 const pool = computed<PickerItem[]>(() => {
   const list: PickerItem[] = [];
   for (const id of getAllActionIds()) {
     const a = getAction(id)!;
-    if (!a.jobs.includes(props.jobId) || topOfChain(id) !== id) continue;
+    if (!a.listed || !a.jobs.includes(props.jobId) || topOfChain(id) !== id) continue;
     const timer = timerOwner(a);
     const recast = evalLevelValue(timer.recast, MAX_LEVEL);
     list.push({ id, name: a.name, icon: a.icon, level: a.level, recast, charges: evalLevelValue(timer.charges, MAX_LEVEL) });

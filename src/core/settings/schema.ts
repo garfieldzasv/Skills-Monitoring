@@ -3,7 +3,7 @@ import type { SkillOverride } from "@/core/game/skillMeta";
 import type { ManualOrder, PartySortSettings, SortPreset } from "@/core/party/sortParty";
 import { DEFAULT_WATCH_ACTIONS } from "@/data/defaultWatchActions";
 
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
 export interface Settings {
   version: typeof SETTINGS_VERSION;

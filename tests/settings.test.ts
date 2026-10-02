@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ADVANCED_JOB_IDS } from "@/core/game/jobs";
+import { migrateSettings } from "@/core/settings/migrate";
 import { defaultSettings } from "@/core/settings/schema";
 import { loadLayout, loadSettings, saveSettings, type KeyValueStore } from "@/core/settings/storage";
 import { exportSettings, importSettings } from "@/core/settings/transfer";
@@ -76,5 +77,18 @@ describe("transfer", () => {
   it("rejects unknown text", () => {
     expect(() => importSettings("not base64 !!", defaultSettings())).toThrow();
     expect(() => importSettings(b64({ hello: "world" }), defaultSettings())).toThrow();
+  });
+});
+
+describe("migrations", () => {
+  it("v1 → v2: swapped-in variants become the action the game lists", () => {
+    const migrated = migrateSettings({
+      version: 1,
+      watchActions: { 38: [16012, 16196, 16193, 16011], 19: [30], 27: [25808] },
+    }) as { version: number; watchActions: Record<number, number[]> };
+    expect(migrated.version).toBe(2);
+    expect(migrated.watchActions[38]).toEqual([16012, 16004, 16011]); // 单色/四色 → 技巧舞步结束, merged
+    expect(migrated.watchActions[19]).toEqual([30]);
+    expect(migrated.watchActions[27]).toEqual([25808]); // unlisted without a listed stand-in: kept
   });
 });

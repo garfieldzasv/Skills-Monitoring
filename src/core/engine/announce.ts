@@ -1,14 +1,13 @@
-import { getAction } from "@/core/game/actions";
 import { getJob, toAdvancedJob } from "@/core/game/jobs";
 import type { AnnounceText, Settings } from "@/core/settings/schema";
 import type { SkillTrigger } from "./monitorEngine";
 
 /**
- * The words spoken for a trigger. The skill name is the action actually cast, so a one-step
- * finish is announced as such rather than as the slot's 四色技巧舞步结束.
+ * The words spoken for a trigger. The skill is named as in the slot (the member's tier of it),
+ * not after the variant the game swapped in: 技巧舞步结束, however many steps were danced.
  */
 export function announcementOf(trigger: SkillTrigger, kind: AnnounceText): string {
-  const skill = getAction(trigger.castActionId)?.name ?? trigger.skill.name;
+  const skill = trigger.skill.name;
   const who =
     kind === "jobAndSkill" ? getJob(trigger.member.job)?.name
     : kind === "memberAndSkill" ? trigger.member.name

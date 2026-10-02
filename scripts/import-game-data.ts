@@ -13,6 +13,7 @@
  *   recastGroup Action.CooldownGroup: actions sharing one are one recast timer in game
  *   upgradesTo  trait "Upgrades X to Y"
  *   replaces    ActionIndirection: a timer-less stand-in for another action's button
+ *   listed      in the game's Actions & Traits list: ClassJobActionUI (CN export), or a role action
  *
  * Anything the rules cannot place (unknown macros, unresolved trait names, CN/global mismatch)
  * stops the import with a list, rather than writing doubtful data.
@@ -28,6 +29,7 @@ import {
   cnCsvUrl,
   cnRows,
   downloadText,
+  parseCsv,
   resolveCnCommit,
   resolveXivapiVersion,
   xivapiRows,
@@ -78,6 +80,7 @@ interface ActionFields {
   "ClassJobCategory@as(raw)": number;
   ClassJobLevel: number;
   IsPlayerAction: boolean;
+  IsRoleAction: boolean;
   Recast100ms: number;
   CooldownGroup: number;
   AdditionalCooldownGroup: number;
@@ -95,6 +98,7 @@ const actionRows = await cache.json("Action.json", () =>
       "ClassJobCategory@as(raw)",
       "ClassJobLevel",
       "IsPlayerAction",
+      "IsRoleAction",
       "Recast100ms",
       "CooldownGroup",
       "AdditionalCooldownGroup",
@@ -132,6 +136,21 @@ const cnTransient = cnRows(
 // Raw column positions in the CN export (SaintCoinach's names for them are stale, see sources.ts).
 const CN = { name: 1, icon: 3, level: 13 } as const;
 
+/**
+ * The job actions the game's Actions & Traits window lists: ClassJobActionUI has one row per
+ * class/job with a subrow per action (raw column 0). XIVAPI's schema has no columns for this
+ * sheet, so it is read from the CN export. Role actions live on the window's role tab instead.
+ */
+const listedJobActions = new Set(
+  parseCsv(await cache.text("cn-ClassJobActionUI.csv", () => downloadText(cnCsvUrl(cn.sha, "ClassJobActionUI"))))
+    .slice(3)
+    .map((cells) => Number(cells[1]))
+    .filter((id) => id > 0),
+);
+if (!listedJobActions.has(15998) || listedJobActions.size < 500) {
+  throw new Error(`ClassJobActionUI looks wrong (${listedJobActions.size} actions); did the CN export's layout change?`);
+}
+
 // ---------- actions ----------
 
 interface Row {
@@ -142,6 +161,7 @@ interface Row {
   jobs: number[];
   level: number;
   isPlayerAction: boolean;
+  listed: boolean;
   recast: number;
   maxCharges: number;
   group: number;
@@ -178,6 +198,7 @@ for (const { row_id: id, fields: f } of actionRows) {
     jobs,
     level: f.ClassJobLevel,
     isPlayerAction: f.IsPlayerAction,
+    listed: listedJobActions.has(id) || f.IsRoleAction,
     recast: f.Recast100ms / 10,
     maxCharges: Math.max(1, f.MaxCharges),
     group: ownGroup === GCD_GROUP ? 0 : ownGroup,
@@ -349,6 +370,7 @@ for (const row of rows.values()) {
     icon: row.icon,
     jobs: row.jobs,
     level: row.level,
+    listed: row.listed,
     recastGroup: row.group,
     recast: perJob(row, (job) => recastSamples(row, job), "recast"),
     charges: perJob(row, (job) => tooltip.get(job)!.charges, "charges"),

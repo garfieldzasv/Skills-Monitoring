@@ -5,7 +5,7 @@
 //   node tests/e2e/overlay.e2e.mjs embedded   → strict mock of OverlayPlugin's CefSharp-bound API
 //   node tests/e2e/overlay.e2e.mjs ws         → fake OverlayPlugin WebSocket server (OVERLAY_WS)
 import { spawn } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -83,8 +83,32 @@ const ability = (source, actionId, type = "21", targetIndex = "0") =>
   logLine({ 0: type, 1: ts(), 2: source, 3: "x", 4: actionId.toString(16).toUpperCase(), 5: "a", 6: "40000001", 45: targetIndex });
 
 // ---------- browser ----------
-const port = 9700 + Math.floor(Math.random() * 90);
-const proc = spawn(process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe", ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), "cdp-"))}`, "--no-first-run", "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows", "about:blank"]);
+// Port 0 lets Chrome pick a free port (written to DevToolsActivePort in its profile), so a run
+// can never attach to a browser left over from an earlier one, with that browser's localStorage.
+const profileDir = mkdtempSync(join(tmpdir(), "cdp-"));
+const proc = spawn(process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe", ["--headless=new", "--remote-debugging-port=0", `--user-data-dir=${profileDir}`, "--no-first-run", "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows", "about:blank"]);
+let port;
+for (let i = 0; i < 100 && !port; i++) {
+  await sleep(100);
+  const file = join(profileDir, "DevToolsActivePort");
+  if (existsSync(file)) port = Number(readFileSync(file, "utf8").split("\n")[0]) || undefined;
+}
+if (!port) throw new Error("Chrome did not report its DevTools port");
+/**
+ * Asks the browser itself to quit. Killing `proc` is not enough on Windows: chrome.exe hands off
+ * to a separate browser process, which would keep running (with this profile) after the test.
+ */
+async function stopChrome() {
+  try {
+    const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
+    const browser = new WebSocket(webSocketDebuggerUrl);
+    await new Promise((r) => browser.addEventListener("open", r));
+    browser.send(JSON.stringify({ id: 1, method: "Browser.close" }));
+    await new Promise((r) => { browser.addEventListener("close", r); setTimeout(r, 2000); });
+  } catch {
+    proc.kill();
+  }
+}
 async function openTab(url, w = 520, h = 400, injectScript = "") {
   let t;
   for (let i = 0; i < 50 && !t; i++) { await sleep(200); try { t = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: "PUT" })).json(); } catch {} }
@@ -219,6 +243,16 @@ check("right-click opens settings at 735px and suppresses the browser menu", ope
 push({ type: "PartyChanged", party: [member("10000003", "学者·我", 28)] });
 await sleep(500);
 check("unlocked + solo → demo party for calibration", (await rowAlts()).length === 8);
+// "模拟全部释放" from the settings window: a stand-in slot (技巧舞步结束) gets the timer of the
+// button it replaces as well as its effect, as in game.
+await settings.evaluate("[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '布局')?.click()");
+await sleep(300);
+await settings.evaluate("[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '模拟全部释放')?.click()");
+await sleep(800);
+const demoFinish = await overlay.evaluate("(() => { const s = [...document.querySelectorAll('.row .skill')].find((x) => x.querySelector('img')?.alt === '技巧舞步结束'); const c = s?.querySelector('.countdown'); return s && { cd: c?.textContent?.trim() ?? '', buff: !!c?.classList.contains('active'), mask: !!s.querySelector('.sweep') }; })()");
+check("demo 模拟全部释放: 技巧舞步结束 shows the cooldown mask and the buff", demoFinish?.mask && demoFinish.buff, JSON.stringify(demoFinish));
+await settings.evaluate("[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === '重置冷却')?.click()");
+await sleep(300);
 await overlay.evaluate("document.dispatchEvent(new CustomEvent('onOverlayStateUpdate',{detail:{isLocked:true}}))");
 await sleep(300);
 const soloRows = await rowAlts();
@@ -256,20 +290,20 @@ await settings.evaluate(`(() => {
 })()`);
 await sleep(400);
 
-// A stand-in's slot (default DNC slot 四色技巧舞步结束): the 120 s timer starts with 技巧舞步,
+// A stand-in's slot (default DNC slot 技巧舞步结束): the 120 s timer starts with 技巧舞步,
 // whose button it replaces while dancing; the 20 s buff starts with the finish.
 push({ type: "PartyChanged", party: [member("10000003", "舞者·我", 38)] });
 await sleep(400);
-const finishSlot = () => overlay.evaluate("(() => { const s = document.querySelectorAll('.row .skill')[1]; const c = s?.querySelector('.countdown'); return s && { alt: s.querySelector('img')?.alt, cd: c?.textContent?.trim() ?? '', buff: !!c?.classList.contains('active') }; })()");
+const finishSlot = () => overlay.evaluate("(() => { const s = document.querySelectorAll('.row .skill')[1]; const c = s?.querySelector('.countdown'); return s && { alt: s.querySelector('img')?.alt, cd: c?.textContent?.trim() ?? '', buff: !!c?.classList.contains('active'), mask: !!s.querySelector('.sweep') }; })()");
 push(ability("10000003", 15998)); // 技巧舞步
 await sleep(800);
 const afterStep = await finishSlot();
-check("技巧舞步 starts the finish slot's 120 s cooldown, no buff yet", afterStep?.alt === "四色技巧舞步结束" && afterStep.cd === "2m" && !afterStep.buff, JSON.stringify(afterStep));
+check("技巧舞步 starts the finish slot's 120 s cooldown (with the mask), no buff yet", afterStep?.alt === "技巧舞步结束" && afterStep.cd === "2m" && afterStep.mask && !afterStep.buff, JSON.stringify(afterStep));
 await sleep(1500);
 push(ability("10000003", 16196)); // 四色技巧舞步结束
 await sleep(800);
 const afterFinish = await finishSlot();
-check("四色技巧舞步结束 starts the 20 s buff", /^(19|20)$/.test(afterFinish?.cd ?? "") && afterFinish.buff, JSON.stringify(afterFinish));
+check("四色技巧舞步结束 starts the 20 s buff, cooldown mask kept", /^(19|20)$/.test(afterFinish?.cd ?? "") && afterFinish.buff && afterFinish.mask, JSON.stringify(afterFinish));
 
 // Announcements through OverlayPlugin's `say` (ACT TTS): switched on in this overlay's layout,
 // "job + skill" text, and 雪仇 silenced for warriors only.
@@ -317,6 +351,6 @@ check("no JS errors in overlay", overlay.errors.length === 0, overlay.errors.joi
 check("no JS errors in settings", settings.errors.length === 0, settings.errors.join(" / "));
 console.log(results.join("\n"));
 console.log(`\n${results.filter((r) => r.startsWith("PASS")).length}/${results.length} passed`);
-proc.kill();
+await stopChrome();
 wss.close();
 process.exit(results.some((r) => r.startsWith("FAIL")) ? 1 : 0);

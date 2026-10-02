@@ -129,9 +129,17 @@ export class MonitorEngine {
     for (const c of this.consumers) c.reset();
   }
 
-  /** Demo helper: behaves like seeing the cast in the log, except that it triggers nothing. */
+  /**
+   * Demo helper: behaves like seeing the cast in the log, except that it triggers nothing. A
+   * stand-in is preceded by the action whose button it replaces, as in game (技巧舞步, then
+   * 技巧舞步结束), so the timer runs and not only the effect.
+   */
   simulateCast(ownerId: string, actionId: number): void {
-    this.useSkill(ownerId.toUpperCase(), actionId, true);
+    const id = ownerId.toUpperCase();
+    const action = getAction(actionId);
+    const owner = action && timerOwner(action);
+    if (owner && owner !== action) this.useSkill(id, owner.id, true);
+    this.useSkill(id, actionId, true);
   }
 
   // ---------- outputs ----------

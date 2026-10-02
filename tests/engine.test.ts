@@ -158,9 +158,9 @@ describe("MonitorEngine", () => {
 
   it("a stand-in's slot: the timer starts with the replaced action, the effect with the stand-in", () => {
     const { engine, advance, at } = setup();
-    engine.setParty([{ id: "10000006", name: "Dnc", job: 38, level: 100 }]); // default slot 四色技巧舞步结束
+    engine.setParty([{ id: "10000006", name: "Dnc", job: 38, level: 100 }]); // default slot 技巧舞步结束
     const slot = engine.getRows()[0]!.slots[1]!;
-    expect(slot.skill).toMatchObject({ actionId: 16196, recastMs: 120_000, durationMs: 20_000 });
+    expect(slot.skill).toMatchObject({ actionId: 16004, recastMs: 120_000, durationMs: 20_000 });
     const state = () => viewAt(engine.cooldowns.get(slot.key!)!, at());
 
     engine.handleLogLine(ability("10000006", 15998)); // 技巧舞步: timer starts, no buff yet
@@ -209,7 +209,7 @@ describe("MonitorEngine", () => {
 
     it("a stand-in's slot fires when its effect starts, not when the timer is spent", () => {
       const { engine } = setup();
-      engine.setParty([{ id: "10000006", name: "Dnc", job: 38, level: 100 }]); // 四色技巧舞步结束 slot
+      engine.setParty([{ id: "10000006", name: "Dnc", job: 38, level: 100 }]); // 技巧舞步结束 slot
       const triggers = collect(engine);
       engine.handleLogLine(ability("10000006", 15998)); // 技巧舞步
       expect(triggers).toHaveLength(0);
@@ -243,6 +243,14 @@ describe("MonitorEngine", () => {
       expect(triggers.map((t) => isSilenced(t, { 23: [117] }))).toEqual([false, true, false, false]);
     });
 
+    it("simulating a stand-in also runs the timer of the button it replaces", () => {
+      const { engine, at } = setup();
+      engine.setParty([{ id: "10000006", name: "Dnc", job: 38, level: 100 }]); // 技巧舞步结束 slot
+      const slot = engine.getRows()[0]!.slots[1]!;
+      engine.simulateCast("10000006", slot.skill!.actionId);
+      expect(viewAt(engine.cooldowns.get(slot.key!)!, at())).toMatchObject({ charges: 0, nextReadyAt: 120_000, activeUntil: 20_000 });
+    });
+
     it("simulated casts (demo) fire nothing", () => {
       const { engine } = setup();
       const triggers = collect(engine);
@@ -262,7 +270,7 @@ describe("MonitorEngine", () => {
       expect(announcementOf(reprisal, "skill")).toBe("雪仇");
       expect(announcementOf(reprisal, "jobAndSkill")).toBe("骑士 雪仇");
       expect(announcementOf(reprisal, "memberAndSkill")).toBe("Tank 雪仇");
-      expect(announcementOf(finish, "skill")).toBe("单色技巧舞步结束"); // what was cast, not the slot
+      expect(announcementOf(finish, "skill")).toBe("技巧舞步结束"); // the slot's name, not the variant cast
       expect(isSilenced(reprisal, { 19: [7535] })).toBe(true);
       expect(isSilenced(reprisal, { 21: [7535] })).toBe(false);
       // A base class uses its job's list, like the slots themselves.

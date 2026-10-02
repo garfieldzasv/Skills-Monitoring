@@ -130,7 +130,7 @@ const flashKey = computed(() => {
 }
 
 .skill.empty .icon {
-  filter: brightness(0.55) saturate(0.7);
+  filter: brightness(0.8) saturate(0.8);
 }
 
 @property --sweep {
@@ -143,7 +143,7 @@ const flashKey = computed(() => {
 .sweep {
   position: absolute;
   inset: 0;
-  background: conic-gradient(transparent calc(var(--sweep) * 360deg), rgb(0 0 0 / 62%) 0);
+  background: conic-gradient(transparent calc(var(--sweep) * 360deg), rgb(0 0 0 / 45%) 0);
   animation-name: sweep;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
@@ -198,15 +198,20 @@ const flashKey = computed(() => {
   color: #ffd34d;
 }
 
+/* Charges in the bottom-right corner, drawn like the in-game hotbar digits: bold white with a
+   heavy dark outline (stroke painted under the fill), readable on bright icons too. */
 .charges {
   position: absolute;
-  right: 1px;
-  bottom: 0;
-  font-size: calc(var(--icon-size) * 0.32 * var(--text-scale));
-  font-weight: 700;
+  right: calc(var(--icon-size) * 0.04);
+  bottom: calc(var(--icon-size) * 0.01);
+  font-size: calc(var(--icon-size) * 0.42 * var(--text-scale));
+  font-weight: 800;
   line-height: 1;
   color: #fff;
-  text-shadow: 0 0 2px #000, 0 0 2px #000;
+  -webkit-text-stroke: calc(var(--icon-size) * 0.09 * var(--text-scale)) #000;
+  paint-order: stroke fill;
+  text-shadow: 0 0 calc(var(--icon-size) * 0.06) rgb(0 0 0 / 80%);
+  font-variant-numeric: tabular-nums;
 }
 
 .charges.zero {

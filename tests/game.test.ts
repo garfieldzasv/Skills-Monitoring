@@ -22,6 +22,20 @@ describe("action data", () => {
     expect(getAction(7535)!.durations).toEqual([[[1, 10], [98, 15]]]); // 雪仇
   });
 
+  it("knows which actions the game's Actions & Traits list shows", () => {
+    expect(getAction(16004)!.listed).toBe(true); // 技巧舞步结束
+    expect(getAction(16196)!.listed).toBe(false); // 四色技巧舞步结束: swapped in by the game only
+    expect(getAction(34675)!.listed).toBe(true); // 星空构想
+    expect(getAction(7535)!.listed).toBe(true); // 雪仇 (role action, on the role tab)
+    expect(getAction(18805)!.listed).toBe(false); // 天之印 while forming a ninjutsu
+  });
+
+  it("every default slot is an action the game lists", () => {
+    for (const [job, ids] of Object.entries(DEFAULT_WATCH_ACTIONS)) {
+      for (const id of ids) expect(getAction(id)?.listed, `${job}:${id}`).toBe(true);
+    }
+  });
+
   it("leaves pets, duty actions and effect variants out", () => {
     expect(getAction(802)).toBeUndefined(); // 仙光的拥抱 (the fairy's)
     expect(getAction(33987)).toBeUndefined(); // 闪躲 (duty action)

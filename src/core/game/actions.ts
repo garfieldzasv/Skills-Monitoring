@@ -9,6 +9,11 @@ export interface GeneratedAction {
   jobs: number[];
   level: number;
   /**
+   * Shown in the game's Actions & Traits list (job actions and role actions). Variants the game
+   * only swaps in, such as 单色~四色技巧舞步结束, are not; the action picker offers listed ones only.
+   */
+  listed: boolean;
+  /**
    * The game's recast timer (Action.CooldownGroup). Actions sharing one share their cooldown,
    * e.g. every tier of an upgrade chain, or 失血箭 and 死亡箭雨. 0 = no timer besides the GCD.
    */
