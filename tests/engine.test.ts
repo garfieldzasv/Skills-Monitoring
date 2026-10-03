@@ -72,12 +72,25 @@ describe("MonitorEngine", () => {
     expect(stateOf(engine, "10000002", 7535)).toBeUndefined();
   });
 
-  it("hides slots a level-synced member has not learned", () => {
+  it("shows slots a level-synced member has not learned as unavailable", () => {
     const { engine } = setup();
     engine.setParty([{ id: "10000002", name: "Tank", job: 19, level: 50 }]);
     const slots = engine.getRows()[0]!.slots;
-    expect(slots).toHaveLength(4); // positions kept
     expect(slots.map((s) => s.skill?.actionId)).toEqual([7535, undefined, undefined, 30]);
+    expect(slots.map((s) => s.unavailable?.name)).toEqual([undefined, "圣光幕帘", "武装戍卫", undefined]);
+    expect(slots[1]!.key).toBeUndefined(); // no cooldown entry
+  });
+
+  it("an unavailable chain shows the tier the member would learn first", () => {
+    const { engine } = setup();
+    const settings = defaultSettings();
+    settings.watchActions[19] = [36920]; // 极致防御 (Lv92), upgraded from 预警 (Lv38)
+    engine.setSettings(settings);
+    engine.setParty([
+      { id: "10000002", name: "Pld30", job: 19, level: 30 },
+      { id: "10000004", name: "Gla", job: 1, level: 30 }, // base class: 预警 is a GLA action too
+    ]);
+    expect(engine.getRows().map((r) => r.slots[0]!.unavailable?.actionId)).toEqual([17, 17]);
   });
 
   it("works solo: OverlayPlugin sends a one-member party", () => {

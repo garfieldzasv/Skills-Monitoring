@@ -174,7 +174,8 @@ const rows = await rowAlts();
 check("8 rows (not-in-party member excluded)", rows.length === 8, `${rows.length}`);
 const expected = ["疾风怒涛之计", "雪仇", "雪仇", "全大赦", "牵制", "牵制", "行吟", ""];
 check("row order: self, tanks, healer, DPS, unsupported job last", expected.every((e, i) => (rows[i] ?? "").split("|")[0] === e || (e === "" && rows[i] === "")), JSON.stringify(rows.map((r) => r.split("|")[0])));
-check("level-synced BRD(70): 光明神的最终乐章 slot kept as spacer", (rows[6] ?? "") === "行吟|战斗之声|_", (rows[6] ?? ""));
+const unavailableIn7th = await overlay.evaluate("[...document.querySelectorAll('.row')][6]?.querySelectorAll('.skill[title$=\"（不可用）\"]').length");
+check("level-synced BRD(70): 光明神的最终乐章 shown greyed out, not left empty", (rows[6] ?? "") === "行吟|战斗之声|光明神的最终乐章" && unavailableIn7th === 1, `${rows[6] ?? ""} unavailable=${unavailableIn7th}`);
 check("unsupported job (BLU) row is empty but present", (rows[7] ?? "") === "", JSON.stringify((rows[7] ?? "")));
 
 const settings = await openTab(MODE === "ws" ? `${base}?OVERLAY_WS=${encodeURIComponent(wsUrl)}#/settings` : `${base}#/settings`, 735, 760);

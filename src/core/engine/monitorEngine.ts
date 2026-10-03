@@ -3,7 +3,7 @@ import { getJob, toAdvancedJob, type JobInfo } from "@/core/game/jobs";
 import { evalLevelValue } from "@/core/game/levelValue";
 import { resolveSkill, shownDuration, type ResolvedSkill } from "@/core/game/skillMeta";
 import { getAction } from "@/core/game/actions";
-import { recastKey, timerOwner, upgradeFamily } from "@/core/game/upgrades";
+import { firstTier, recastKey, timerOwner, upgradeFamily } from "@/core/game/upgrades";
 import type { GameEventConsumer, GaugeContext } from "@/core/gauges/types";
 import { AbilityField, ActorControlField, LineType, WIPE_COMMANDS } from "@/core/logline/fields";
 import { eventTypeOfLine, parseLogLine, type GameEventType } from "@/core/logline/parse";
@@ -13,10 +13,23 @@ import type { Settings } from "@/core/settings/schema";
 export const MAX_ROWS = 8;
 
 export interface SkillSlot {
-  /** Undefined when this member has no tier of the configured action (the slot stays empty). */
+  /** Undefined when this member has no tier of the configured action, see `unavailable`. */
   skill?: ResolvedSkill;
   /** Cooldown tracker key; set together with `skill`. */
   key?: string;
+  /**
+   * Set instead of `skill` when the member cannot use the action (not learned at their level or
+   * synced below it, or a job action for a base class). Shown greyed out, so rows stay aligned
+   * and complete; it has no cooldown and is not announced.
+   */
+  unavailable?: UnavailableSkill;
+}
+
+export interface UnavailableSkill {
+  /** The tier the member would learn first, or the configured action. */
+  actionId: number;
+  name: string;
+  iconId: number;
 }
 
 export interface MemberRow {
@@ -219,7 +232,10 @@ export class MonitorEngine {
       const level = member.level || 100;
       const slots = actionIds.map((slotActionId): SkillSlot => {
         const skill = resolveSkill(slotActionId, member.job, level, overrideOf);
-        if (!skill) return {};
+        if (!skill) {
+          const shown = getAction(firstTier(slotActionId, member.job) ?? slotActionId);
+          return shown ? { unavailable: { actionId: shown.id, name: shown.name, iconId: shown.icon } } : {};
+        }
         const key = cooldownKey(member.id, skill.recastKey);
         const { recastMs, maxCharges, durationMs } = skill;
         this.cooldowns.ensure(key, { recastMs, maxCharges, durationMs }, now);

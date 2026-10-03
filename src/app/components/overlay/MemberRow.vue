@@ -2,6 +2,7 @@
 import type { CooldownState } from "@/core/cooldown/cooldownTracker";
 import type { MemberRow } from "@/core/engine/monitorEngine";
 import SkillIcon from "./SkillIcon.vue";
+import UnavailableSkillIcon from "./UnavailableSkillIcon.vue";
 
 defineProps<{
   row: MemberRow;
@@ -15,6 +16,7 @@ defineProps<{
   <div class="row">
     <template v-for="(slot, i) in row.slots" :key="slot.key ?? `empty-${i}`">
       <SkillIcon v-if="slot.skill" :skill="slot.skill" :state="stateOf(slot.key!)" :show-duration="showDuration" />
+      <UnavailableSkillIcon v-else-if="slot.unavailable" :skill="slot.unavailable" />
       <div v-else class="spacer" />
     </template>
   </div>

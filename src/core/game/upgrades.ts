@@ -74,6 +74,19 @@ export function recastKey(actionId: number): string | undefined {
 }
 
 /**
+ * The tier a player of `jobId` learns first (the lowest level), to show an action they cannot use
+ * yet. Undefined when no tier is ever usable by that job (e.g. a job action for its base class).
+ */
+export function firstTier(actionId: number, jobId: number): number | undefined {
+  let first: ActionData | undefined;
+  for (const id of upgradeFamily(actionId)) {
+    const action = getAction(id);
+    if (action && canJobUse(action, jobId) && (!first || action.level < first.level)) first = action;
+  }
+  return first?.id;
+}
+
+/**
  * The tier a player of `jobId` at `level` actually has: the highest-level usable tier whose
  * required level is met. Undefined when no tier is learned (e.g. level-synced below it).
  */
