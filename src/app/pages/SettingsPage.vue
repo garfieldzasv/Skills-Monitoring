@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import LayoutPanel from "@/app/components/common/LayoutPanel.vue";
 import OverrideEditor from "@/app/components/settings/OverrideEditor.vue";
 import PreviewControls from "@/app/components/settings/PreviewControls.vue";
@@ -7,6 +7,7 @@ import SlotEditor from "@/app/components/settings/SlotEditor.vue";
 import SortEditor from "@/app/components/settings/SortEditor.vue";
 import TransferPanel from "@/app/components/settings/TransferPanel.vue";
 import { urlParams } from "@/app/composables/useUrlParams";
+import { forgetIfOffScreen, savePosition, SETTINGS_WINDOW } from "@/app/settingsWindow";
 
 // Ordered by how often each is used.
 const TABS = [
@@ -18,6 +19,13 @@ const TABS = [
 ] as const;
 
 const active = ref<(typeof TABS)[number]["key"]>(TABS[0].key);
+
+// The window opened by the overlay remembers where it is closed, to open there next time.
+onMounted(() => {
+  if (!window.opener || window.name !== SETTINGS_WINDOW.name) return;
+  forgetIfOffScreen(window);
+  window.addEventListener("pagehide", () => savePosition(window));
+});
 </script>
 
 <template>

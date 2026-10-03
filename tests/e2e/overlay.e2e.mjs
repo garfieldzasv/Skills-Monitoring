@@ -238,7 +238,12 @@ await sleep(300);
 check("unlocked: frame + hint shown", await overlay.evaluate("document.querySelector('.frame .hint')?.textContent === '右键打开设置'"));
 check("unlocked with a real party: no demo party", (await rowAlts()).length === 7);
 const opened = await overlay.evaluate("(()=>{let args; const o=window.open; window.open=(...a)=>{args=a; return null}; const e=new MouseEvent('contextmenu',{bubbles:true,cancelable:true}); document.querySelector('.overlay').dispatchEvent(e); window.open=o; return {args, prevented: e.defaultPrevented}})()");
-check("right-click opens settings at 735px and suppresses the browser menu", opened?.prevented && opened.args?.[0]?.includes("#/settings") && opened.args?.[2]?.includes("width=735"), JSON.stringify(opened));
+check("right-click opens settings at 735 × 955 and suppresses the browser menu", opened?.prevented && opened.args?.[0]?.includes("#/settings") && opened.args?.[2] === "width=735,height=955", JSON.stringify(opened));
+// The settings window remembers where it was closed; the next open passes that place.
+await settings.evaluate(`localStorage.setItem("skills-monitoring:settings-window-position", JSON.stringify({ left: 1200, top: 60 }))`);
+const reopened = await overlay.evaluate("(()=>{let args; const o=window.open; window.open=(...a)=>{args=a; return null}; document.querySelector('.overlay').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true})); window.open=o; return args?.[2]})()");
+check("settings window opens where it was last closed", reopened === "width=735,height=955,left=1200,top=60", reopened);
+await settings.evaluate(`localStorage.removeItem("skills-monitoring:settings-window-position")`);
 
 // Solo, as real OverlayPlugin reports it: a one-member party containing only ourselves.
 push({ type: "PartyChanged", party: [member("10000003", "学者·我", 28)] });

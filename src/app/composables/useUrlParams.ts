@@ -1,3 +1,5 @@
+import { savedPosition, SETTINGS_WINDOW, settingsWindowFeatures } from "@/app/settingsWindow";
+
 /**
  * Reads URL parameters from both the query string and the hash query (`#/settings?x=1`), since
  * OverlayPlugin URLs are often written either way.
@@ -25,14 +27,7 @@ function settingsUrl(): string {
   return `${window.location.pathname}${window.location.search}#/settings`;
 }
 
-/** The settings layout is designed for this width (every tab verified without overflow). */
-const SETTINGS_WINDOW_WIDTH = 735;
-const SETTINGS_WINDOW_HEIGHT = 760;
-
+/** Opens (or brings back) the settings window, at the place it was last closed at. */
 export function openSettingsWindow(): void {
-  window.open(
-    settingsUrl(),
-    "skills-monitoring-settings",
-    `width=${SETTINGS_WINDOW_WIDTH},height=${SETTINGS_WINDOW_HEIGHT}`,
-  );
+  window.open(settingsUrl(), SETTINGS_WINDOW.name, settingsWindowFeatures(savedPosition(window.localStorage)));
 }
